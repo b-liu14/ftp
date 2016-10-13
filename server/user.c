@@ -15,11 +15,11 @@ int check_username(char* username){
 }
 
 int check_password(char* password) {
-	for(int i = 0; i < strlen(password); i ++) {
-		if(password[i] == '@') {
-			return 1;
-		}
-	}
+    for(int i = 0; i < strlen(password); i++) {
+        if(password[i] == '@') {
+            return 1;
+        }
+    }
     return 0;
 }
 

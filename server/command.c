@@ -50,6 +50,10 @@ int string2command(char* str, Command* ptr_command) {
 		len--;
 		str[len] = '\0';
 	}
+    if(str[len-1] == '\r') {
+        len--;
+        str[len] = '\0';
+    }
 
 	for (int i = 0; i <= len; i ++) {
 		if(i == len) {
@@ -79,6 +83,7 @@ int string2command(char* str, Command* ptr_command) {
  */
 void handle_message(int socketfd, char message[]) {
 	// handle command from a client
+    memset(message, 0, MAX_COMMAND_PARAM_LENGTH);
 	int len = (int)recv(socketfd, message, MAX_BUFF_LENGTH, 0);
 	if (len <= 0) {
 		// got error or connection closed by client
@@ -236,7 +241,6 @@ int _check_port_param(char* param) {
  * @param socketfd file descriptor of socket which sends the command
  */
 void handle_PORT(UserInfo* ptr_user_info, char* param, int socketfd) {
-
 	if(_check_port_param(param)) {
 		send_or_error(socketfd, "500 Invalid parameter\r\n");
 		return;
@@ -289,7 +293,9 @@ int _create_file_socket(UserInfo* ptr_user_info, char* port_str) {
 	}
 
 	srand((unsigned)time(NULL));
-	addr.sin_port = _get_random_port();
+    int port = _get_random_port();
+	addr.sin_port = htons(port);
+    printf("port = %d changed = %d\n", port, addr.sin_port);
 	while (bind(ptr_user_info->listen_socketfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
 		if( errno == EADDRINUSE ) {
 			addr.sin_port = _get_random_port();
@@ -305,7 +311,7 @@ int _create_file_socket(UserInfo* ptr_user_info, char* port_str) {
 		return -1;
 	}
 
-	sprintf(port_str, "%d.%d", addr.sin_port / 256, addr.sin_port % 256);
+	sprintf(port_str, "%d.%d", port / 256, port % 256);
 	return 0;
 }
 
@@ -353,7 +359,7 @@ void handle_SYST(UserInfo* ptr_user_info, char* param, int socketfd) {
 
 void handle_TYPE(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(strcmp(param, "I") == 0) {
-		send_or_error(socketfd, "200 Type set to I\r\n");
+		send_or_error(socketfd, "200 Type set to I.\r\n");
 	} else {
 		send_or_error(socketfd, "504 server supports the verb but does not support the parameter.\r\n");
 	}
@@ -394,14 +400,16 @@ int _create_connect_socket(char* addr_str) {
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = port_number;
+	addr.sin_port = htons(port_number);
 
 	if (inet_pton(AF_INET, ip, &addr.sin_addr) <= 0) {
-		return -1;
+        perror("inet_pton");
+        return -1;
 	}
 
 	if (connect(connect_socketfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-		return -1;
+        perror("connect");
+        return -1;
 	}
 
 	return connect_socketfd;
@@ -415,15 +423,9 @@ int _create_connect_socket(char* addr_str) {
  * @param buff 
  */
 int _read_whole_file(char* filename, char* buff) {
-
-	// TODO
-	// check ../
-	char path[MAX_DIR_LENGTH] = "\0";
-	strncpy(path, directory, MAX_DIR_LENGTH);
-	strncpy(path+strlen(path), filename, MAX_DIR_LENGTH);
-
 	memset(buff, 0, MAX_BUFF_LENGTH);
 	int total = 0;
+    int n = 0;
 
 	FILE* fin;
 	if((fin = fopen(filename, "rb")) == NULL) {
@@ -431,7 +433,8 @@ int _read_whole_file(char* filename, char* buff) {
 	}
 
 	while(! feof(fin)) {
-		total += (int)fread(buff+total, sizeof(char), MAX_BUFF_LENGTH, fin);
+		n = (int)fread(buff+total, sizeof(char), MAX_BUFF_LENGTH, fin);
+        total += n;
 		if(ferror(fin)) {
 			fclose(fin);
 			return -1;
@@ -489,9 +492,9 @@ int _recv_and_write_all(int socketfd, char* filename) {
 	} else {
 		FILE* fout = fopen(filename, "wb");
 		int left = total;
-		int n = -1;
 		while(left > 0) {
-			left -= (int)fwrite(buff, sizeof(char), MAX_BUFF_LENGTH, fout);
+            int n = (int)fwrite(buff + total - left, sizeof(char), left, fout);
+            left -= n;
 			if(ferror(fout)) {
 				fclose(fout);
 				return -1;
@@ -517,22 +520,29 @@ void handle_RETR(UserInfo* ptr_user_info, char* param, int socketfd) {
 		connectfd = _create_connect_socket(ptr_user_info->addr_str);
 		if(connectfd == -1) {
             send_or_error(ptr_user_info->socketfd, "400 can not create connect socket!\r\n");
+			printf("can not create connect socket\r\n");
 			return;
 		}
 
 	} else if(ptr_user_info->state == 4) {
 		if((connectfd = accept(ptr_user_info->listen_socketfd, NULL, NULL)) < 0) {
-            send_or_error(ptr_user_info->socketfd, "500 can not accept connect socket!\r\n");
+			printf("can not accept on socket %d\n", ptr_user_info->listen_socketfd);
+            send_or_error(ptr_user_info->socketfd, "400 can not accept connect socket!\r\n");
 			return;
 		}
 
 	} else {
-        send_or_error(ptr_user_info->socketfd, "500 user on socket %d should specify PORT/PASV mode before RETR/STOR\r\n");
+		printf("user on socket %d should specify PORT/PASV mode before RETR/STOR\n", socketfd);
+        send_or_error(ptr_user_info->socketfd, "400 user on socket %d should specify PORT/PASV mode before RETR/STOR\r\n");
 		return;
 
 	}
-		
-    if(_read_whole_file(param, buff) == -1) {
+    
+    char path[MAX_DIR_LENGTH] = "\0";
+    strncpy(path, directory, MAX_DIR_LENGTH);
+    strncpy(path+strlen(path), param, MAX_DIR_LENGTH);
+    int len = _read_whole_file(path, buff);
+    if(len == -1) {
         send_or_error(ptr_user_info->socketfd, "550 File failed to be opened!\r\n");
         close(connectfd);
         return;
@@ -544,10 +554,11 @@ void handle_RETR(UserInfo* ptr_user_info, char* param, int socketfd) {
 		param, (int)strlen(buff));
 	send_or_error(ptr_user_info->socketfd, message);
     
-    int len = (int)strlen(buff) + 1;
 	_sendall(connectfd, buff, &len);
 
 	close(connectfd);
+
+	usleep(100000);
 
 	send_or_error(ptr_user_info->socketfd, "226 Transfer complete\r\n");
 }
@@ -563,17 +574,29 @@ void handle_STOR(UserInfo* ptr_user_info, char* param, int socketfd) {
 
 	if(ptr_user_info->state == 3) {
 		connectfd = _create_connect_socket(ptr_user_info->addr_str);
+		if(connectfd == -1) {
+			printf("can not create connect socket\n");
+			return;
+		}
+
 	} else if(ptr_user_info->state == 4) {
-		connectfd = accept(ptr_user_info->listen_socketfd, NULL, NULL);
+		if((connectfd = accept(ptr_user_info->listen_socketfd, NULL, NULL)) < 0) {
+			printf("can not accept on socket %d\n", ptr_user_info->listen_socketfd);
+			return;
+        } else {
+            send_or_error(ptr_user_info->socketfd, "150 Connected\r\n");
+        }
+
 	} else {
+		printf("user on socket %d should specify PORT/PASV mode before RETR/STOR\n", socketfd);
 		return;
 	}
 
-	if(connectfd < 0) {
-		return;
-	}
-
-	if(_recv_and_write_all(connectfd, param) == -1) {
+    
+    char path[MAX_DIR_LENGTH] = "\0";
+    strncpy(path, directory, MAX_DIR_LENGTH);
+    strncpy(path+strlen(path), param, MAX_DIR_LENGTH - strlen(path));
+	if(_recv_and_write_all(connectfd, path) == -1) {
 		send_or_error(ptr_user_info->socketfd, "550 File failed to be transfered.\r\n");
 	} else {
 		send_or_error(ptr_user_info->socketfd, "226 Transfer complete\r\n");

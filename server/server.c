@@ -1,7 +1,6 @@
 #include "utility.h"
 #include "user.h"
 #include "command.h"
-// TODO: check code and promt sentence
 
 UserInfo user_info_list[MAX_USER_NUM];
 int listenfd;		// listen file descriptor
@@ -9,6 +8,7 @@ fd_set master;		// master file descriptor list
 int fd_max; 		// maximum file descriptor number
 const char* ip_str = "127.0.0.1";
 char directory[MAX_DIR_LENGTH] = "/tmp";
+char sentence[MAX_COMMAND_PARAM_LENGTH];
 
 int parse_argv(int argc, char** argv, int* port, char* directory) {
 	for(int i = 1; i < argc; i++) {
@@ -22,15 +22,15 @@ int parse_argv(int argc, char** argv, int* port, char* directory) {
 				return -1;
 			}
 			strncpy(directory, argv[++i], MAX_DIR_LENGTH);
-			int len = strlen(directory);
-			if(directory[len - 1] != '/') {
-				directory[len] = '/';
-				directory[len+1] = '\0';
-			}
 		} else {
 			return -1;
 		}
 	}
+    int len = (int)strlen(directory);
+    if(directory[len - 1] != '/') {
+        directory[len] = '/';
+        directory[len+1] = '\0';
+    }
 	return 0;
 }
 
@@ -40,11 +40,9 @@ int main(int argc, char **argv) {
 		printf("invalid paramter\n");
 		return 1;
 	}
-	
 	printf("port = %d\ndirectory = %s\n", port, directory);
-
+    
 	struct sockaddr_in addr;
-	char sentence[MAX_BUFF_LENGTH];
 
 	if ((listenfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1) {
 		perror("socket");

@@ -18,7 +18,7 @@ int string2prompt(char* str, Prompt* pro) {
 	// len should not be smaller than 3 because there is a code with three digit.
 	// and should not also be bigger than 103 because the max length of param is 100-1;
 	if(len < 3 || len > MAX_PROMPT_MESSAGE_LENGTH + 3) {
-		printf("500 Length of str(%s) should between 3 and %d\n", 
+		printf("500 Length of str(%s) should between 3 and %d\n",
 			str, MAX_PROMPT_MESSAGE_LENGTH + 3);
 		return -1;
 	}
