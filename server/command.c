@@ -158,6 +158,24 @@ void handle_command(Command* ptr_command, int socketfd) {
 		handle_RETR(ptr_user_info, ptr_command->param, socketfd);
 	} else if(strcmp(ptr_command->cmd, "STOR") == 0) {
 		handle_STOR(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "CWD") == 0) {
+		handle_CWD(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "CDUP") == 0) {
+		handle_CDUP(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "DELE") == 0) {
+		handle_DELE(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "LIST") == 0) {
+		handle_LIST(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "MKD") == 0) {
+		handle_MKD(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "PWD") == 0) {
+		handle_PWD(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "RMD") == 0) {
+		handle_RMD(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "RNFR") == 0) {
+		handle_RNFR(ptr_user_info, ptr_command->param, socketfd);
+	} else if(strcmp(ptr_command->cmd, "RNTO") == 0) {
+		handle_RNTO(ptr_user_info, ptr_command->param, socketfd);
 	} else {
 		send_or_error(socketfd, "500 Syntax error, command unrecognized.\r\n");
 	}
@@ -171,7 +189,7 @@ void handle_command(Command* ptr_command, int socketfd) {
  */
 void handle_USER(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(ptr_user_info->state != 0) {
-		send_or_error(socketfd, "502 username has been set\r\n");
+		send_or_error(socketfd, "230 User logged in, proceed.\r\n");
 	} else {
 		if(check_username(param)) {
 			ptr_user_info->state = 1;
@@ -190,9 +208,9 @@ void handle_USER(UserInfo* ptr_user_info, char* param, int socketfd) {
  */
 void handle_PASS(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(ptr_user_info->state == 0) {
-		send_or_error(socketfd, "332 Need username for login\r\n");
+		send_or_error(socketfd, "503 Need username for login\r\n");
 	} else if(ptr_user_info->state != 1) {
-		send_or_error(socketfd, "502 Password has been set\r\n");
+		send_or_error(socketfd, "230 User logged in, proceed.\r\n");
 	} else {
 		if(check_password(param)) {
 			ptr_user_info->state = 2;
@@ -246,10 +264,9 @@ void handle_PORT(UserInfo* ptr_user_info, char* param, int socketfd) {
 		return;
 	}
 
-	if(ptr_user_info->state == 0) {
-		send_or_error(socketfd, "332 Need username for login\r\n");
-	} else if(ptr_user_info->state == 1) {
-		send_or_error(socketfd, "331 Need password for login\r\n");
+	if(ptr_user_info->state < 2) {
+		send_or_error(socketfd, "421 Service not available, closing control connection.\r\n");
+		delete_user_info(ptr_user_info);
 	} else {
 		if(ptr_user_info->listen_socketfd != -1) {
 			close(ptr_user_info->listen_socketfd);
@@ -323,13 +340,13 @@ int _create_file_socket(UserInfo* ptr_user_info, char* port_str) {
  */
 void handle_PASV(UserInfo* ptr_user_info, char* param, int socketfd) {
     if(strlen(param) > 0) {
-        send_or_error(socketfd, "504 PASV should not have parameter\r\n");
+        send_or_error(socketfd, "501 PASV should not have parameter\r\n");
     }
     
-	if(ptr_user_info->state == 0) {
-		send_or_error(socketfd, "332 Need username for login\r\n");
-	} else if(ptr_user_info->state == 1) {
-		send_or_error(socketfd, "331 Need password for login\r\n");
+	
+	if(ptr_user_info->state < 2) {
+		send_or_error(socketfd, "421 Service not available, closing control connection.\r\n");
+		delete_user_info(ptr_user_info);
 	} else {
 		if(ptr_user_info->listen_socketfd != -1) {
 			close(ptr_user_info->listen_socketfd);
@@ -423,7 +440,6 @@ int _create_connect_socket(char* addr_str) {
  * @param buff 
  */
 int _read_whole_file(char* filename, char* buff) {
-	memset(buff, 0, MAX_BUFF_LENGTH);
 	int total = 0;
     int n = 0;
 
@@ -440,6 +456,8 @@ int _read_whole_file(char* filename, char* buff) {
 			return -1;
 		}
 	}
+
+	buff[total] = '\0';
 
 	fclose(fin);
 	return total;
@@ -479,7 +497,6 @@ int _recv_and_write_all(int socketfd, char* filename) {
 	int total = 0;
 	int n;
 	char buff[MAX_BUFF_LENGTH];
-	memset(buff, 0, MAX_BUFF_LENGTH);
 	char* ptr = buff;
 	while(1) {
 		n = (int)recv(socketfd, ptr, MAX_BUFF_LENGTH, 0);
@@ -519,28 +536,25 @@ void handle_RETR(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(ptr_user_info->state == 3) {
 		connectfd = _create_connect_socket(ptr_user_info->addr_str);
 		if(connectfd == -1) {
-            send_or_error(ptr_user_info->socketfd, "400 can not create connect socket!\r\n");
-			printf("can not create connect socket\r\n");
+            send_or_error(ptr_user_info->socketfd, "425 Can not create connect socket!\r\n");
 			return;
 		}
 
 	} else if(ptr_user_info->state == 4) {
 		if((connectfd = accept(ptr_user_info->listen_socketfd, NULL, NULL)) < 0) {
-			printf("can not accept on socket %d\n", ptr_user_info->listen_socketfd);
-            send_or_error(ptr_user_info->socketfd, "400 can not accept connect socket!\r\n");
+            send_or_error(ptr_user_info->socketfd, "425 Can not accept connect socket!\r\n");
 			return;
 		}
 
 	} else {
-		printf("user on socket %d should specify PORT/PASV mode before RETR/STOR\n", socketfd);
-        send_or_error(ptr_user_info->socketfd, "400 user on socket %d should specify PORT/PASV mode before RETR/STOR\r\n");
+        send_or_error(ptr_user_info->socketfd, "425 Should specify PORT/PASV mode before RETR/STOR\r\n");
 		return;
 
 	}
     
     char path[MAX_DIR_LENGTH] = "\0";
-    strncpy(path, directory, MAX_DIR_LENGTH);
-    strncpy(path+strlen(path), param, MAX_DIR_LENGTH);
+    strncpy(path, ptr_user_info->working_directory, MAX_DIR_LENGTH);
+    strncpy(path+strlen(path), param, MAX_DIR_LENGTH - strlen(path));
     int len = _read_whole_file(path, buff);
     if(len == -1) {
         send_or_error(ptr_user_info->socketfd, "550 File failed to be opened!\r\n");
@@ -575,26 +589,24 @@ void handle_STOR(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(ptr_user_info->state == 3) {
 		connectfd = _create_connect_socket(ptr_user_info->addr_str);
 		if(connectfd == -1) {
-			printf("can not create connect socket\n");
 			return;
 		}
 
 	} else if(ptr_user_info->state == 4) {
 		if((connectfd = accept(ptr_user_info->listen_socketfd, NULL, NULL)) < 0) {
-			printf("can not accept on socket %d\n", ptr_user_info->listen_socketfd);
 			return;
         } else {
-            send_or_error(ptr_user_info->socketfd, "150 Connected\r\n");
+            send_or_error(ptr_user_info->socketfd, "150 Connected.\r\n");
         }
 
 	} else {
-		printf("user on socket %d should specify PORT/PASV mode before RETR/STOR\n", socketfd);
+		send_or_error(ptr_user_info->socketfd, "500 Should specify PORT/PASV mode before RETR/STOR\n");
 		return;
 	}
 
     
     char path[MAX_DIR_LENGTH] = "\0";
-    strncpy(path, directory, MAX_DIR_LENGTH);
+    strncpy(path, ptr_user_info->working_directory, MAX_DIR_LENGTH);
     strncpy(path+strlen(path), param, MAX_DIR_LENGTH - strlen(path));
 	if(_recv_and_write_all(connectfd, path) == -1) {
 		send_or_error(ptr_user_info->socketfd, "550 File failed to be transfered.\r\n");
@@ -603,4 +615,82 @@ void handle_STOR(UserInfo* ptr_user_info, char* param, int socketfd) {
 	}
 
 	close(connectfd);
+}
+
+// excute a shelle command, and store the output in string: buff.
+// return total length of buff if success, oterwise return -1
+int console(char* command, char* buff) {
+	strcat(command, " 2>&1");
+	FILE *fin = popen(command, "r");
+
+	if (!fin)
+	{
+	  	return -1;
+	}
+
+	int total = 0;
+	int n = 0;
+
+	while(! feof(fin)) {
+		n = (int)fread(buff+total, sizeof(char), MAX_BUFF_LENGTH, fin);
+        total += n;
+		if(ferror(fin)) {
+			fclose(fin);
+			return -1;
+		}
+	}
+
+	buff[total] = '\0';
+	pclose(fin);
+
+	return total;
+}
+
+void handle_CWD(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+	}
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_SHELL_COMMAND_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s", param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	strcat(result, "\r\n");
+	send_or_error(ptr_user_info->socketfd, result);
+	free(result);
+	free(shell_command);
+}
+
+void handle_CDUP	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_DELE	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_LIST	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_MKD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_PWD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_RMD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_RNFR	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
+}
+
+void handle_RNTO	(UserInfo* ptr_user_info, char* param, int socketfd) {
+
 }

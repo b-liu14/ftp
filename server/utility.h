@@ -38,5 +38,8 @@
 
 #define MAX_DIR_LENGTH 100
 
+#define MAX_SHELL_RESPONSE_LENGTH  1000
+#define MAX_SHELL_COMMAND_LENGTH 100
+
 extern const char* ip_str;
 

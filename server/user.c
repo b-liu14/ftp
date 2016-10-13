@@ -38,6 +38,7 @@ int new_userinfo(int socketfd) {
 			user_info_list[i].socketfd = socketfd;
 			user_info_list[i].state = 0;
 			user_info_list[i].listen_socketfd = -1;
+			strcpy(user_info_list[i].working_directory, directory);
             return 0;
 		}
 	}

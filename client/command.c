@@ -60,7 +60,6 @@ int string2command(char* str, Command* ptr_command) {
     
     for (int i = 0; i <= len && i <= MAX_CMD_LENGTH; i ++) {
         if(i == len) {
-            // no param
             strncpy(ptr_command->cmd, str, len+1);
             memset(ptr_command->param, 0, MAX_COMMAND_PARAM_LENGTH);
             return 0;
@@ -297,7 +296,6 @@ int _read_whole_file(char* filename, char* buff) {
     strncpy(path, directory, MAX_DIR_LENGTH);
     strncpy(path+strlen(path), filename, MAX_DIR_LENGTH);
     
-    memset(buff, 0, MAX_BUFF_LENGTH);
     int total = 0;
     
     FILE* fin;
@@ -312,6 +310,8 @@ int _read_whole_file(char* filename, char* buff) {
             return -1;
         }
     }
+
+    buff[total] = '\0';
     
     fclose(fin);
     return total;
@@ -344,7 +344,6 @@ int _recv_and_write_all(int socketfd, char* filename) {
     int total = 0;
     int n;
     char buff[MAX_BUFF_LENGTH];
-    memset(buff, 0, MAX_BUFF_LENGTH);
     char* ptr = buff;
     while(1) {
         n = (int)recv(socketfd, ptr, MAX_BUFF_LENGTH, 0);
