@@ -62,7 +62,7 @@ int string2command(char* str, Command* ptr_command) {
 				printf("400 str(%s) is a invalid command\n", str);
 				return -1;
 			}
-			strncpy(ptr_command->cmd, str, len);
+			strcpy(ptr_command->cmd, str);
 			memset(ptr_command->param, 0, MAX_COMMAND_PARAM_LENGTH);
 			break;
 		} else if(str[i] == ' ') {
@@ -83,7 +83,6 @@ int string2command(char* str, Command* ptr_command) {
  */
 void handle_message(int socketfd, char message[]) {
 	// handle command from a client
-    memset(message, 0, MAX_COMMAND_PARAM_LENGTH);
 	int len = (int)recv(socketfd, message, MAX_BUFF_LENGTH, 0);
 	if (len <= 0) {
 		// got error or connection closed by client
@@ -96,8 +95,8 @@ void handle_message(int socketfd, char message[]) {
         UserInfo* ptr_user_info = get_userinfo_by_sockedfd(socketfd);
         delete_user_info(ptr_user_info);
 	} else {
-		printf("recv on %d: %s\n", socketfd, message);
-
+		printf("recv on %d: %s(%d bits)\n", socketfd, message, len);
+		message[len] = '\0';
 		Command command;
 		if(string2command(message, &command) < 0) {
 			send_or_error(socketfd, "500 request violated some internal parsing rule in the server\r\n");
@@ -635,7 +634,7 @@ int console(char* command, char* buff) {
 		n = (int)fread(buff+total, sizeof(char), MAX_BUFF_LENGTH, fin);
         total += n;
 		if(ferror(fin)) {
-			fclose(fin);
+			pclose(fin);
 			return -1;
 		}
 	}
@@ -646,51 +645,306 @@ int console(char* command, char* buff) {
 	return total;
 }
 
+// add a code to every line in str.
+int send_patched_prompt(int socketfd, char* msg, char* code)  {
+	if(strlen(code) != 3) {
+		return -1;
+	}
+	
+	char* newMsg = (char*) malloc(sizeof(char) * MAX_SHELL_RESPONSE_LENGTH);
+	*newMsg = '\0';
+
+    char* beg = msg, *end = msg;
+    while(*end != '\0')
+    {
+        while(*end != '\n' && *end != '\0') {
+        	end++;
+        }
+        *end = '\0';
+        strcat(newMsg, code);
+        strcat(newMsg, "-");
+        strcat(newMsg, beg);
+        strcat(newMsg, "\r\n");
+        beg = end + 1;
+        end++;
+    }
+    strcat(newMsg, code);
+    strcat(newMsg, " ");
+    strcat(newMsg, "Command done\r\n");
+    
+    send_or_error(socketfd, newMsg);
+
+	free(newMsg);
+	return 0;
+}
+
 void handle_CWD(UserInfo* ptr_user_info, char* param, int socketfd) {
 	if(ptr_user_info->state < 2) {
 		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
 	}
+
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify working directory!\r\n");
+		return;
+	}
+
 	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
-	char* shell_command = (char*)malloc(MAX_SHELL_COMMAND_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+
+	if(param[0] != '/') {
+		strcpy(result, ptr_user_info->working_directory);
+		strcat(result, param);			
+		strcpy(param, result);
+	}
+
 	sprintf(shell_command, "cd %s", param);
 	printf("shell_command = %s\n", shell_command);
 	
 	console(shell_command, result);
 
-	strcat(result, "\r\n");
-	send_or_error(ptr_user_info->socketfd, result);
+	printf("result = %s", result);
+
+	if(strlen(result) == 0) {
+		strcpy(ptr_user_info->working_directory, param);
+		check_directory(ptr_user_info->working_directory);
+		sprintf(result, "250 You are now at '%s'\r\n", ptr_user_info->working_directory);
+	} else {
+		sprintf(result, "501 Can't change working directory to '%s'\r\n", param);
+	}
+	send_or_error(socketfd, result);
+
 	free(result);
 	free(shell_command);
 }
 
 void handle_CDUP	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
+	char* beg = ptr_user_info->working_directory;
+	char* end = beg + strlen(beg) - 2;
+	while(end > beg && *end != '/') {
+		end --;
+	}
+	*(end+1) = 0;
 
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	sprintf(result, "200 You are now at '%s'\r\n", ptr_user_info->working_directory);
+	send_or_error(socketfd, result);
+
+	free(result);
 }
 
 void handle_DELE	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify file path to delete!\r\n");
+		return;
+	}
+
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s; rm %s", user_info_list->working_directory, param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+
+	if(strlen(result) == 0) {
+		sprintf(result, "250 Delete '%s' success!\r\n", param);
+		send_or_error(socketfd, result);
+	} else {
+		send_patched_prompt(socketfd, result, "501");
+	}
+
+	free(result);
+	free(shell_command);
 }
 
 void handle_LIST	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s; ls -l", user_info_list->working_directory);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+
+	send_patched_prompt(socketfd, result, "250");
+	
+	free(result);
+	free(shell_command);
 }
 
 void handle_MKD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify directory name to make!\r\n");
+		return;
+	}
+
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s; mkdir %s", user_info_list->working_directory, param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+
+	if(strlen(result) == 0) {
+		sprintf(result, "250 Make directory '%s' success!\r\n", param);
+		send_or_error(socketfd, result);
+	} else {
+		send_patched_prompt(socketfd, result, "501");
+	}
+
+	free(result);
+	free(shell_command);
 }
 
 void handle_PWD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s; pwd", user_info_list->working_directory);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+
+	send_patched_prompt(socketfd, result, "257");
+
+	free(result);
+	free(shell_command);
 }
 
 void handle_RMD	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify directory name to remove!\r\n");
+		return;
+	}
+
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+	sprintf(shell_command, "cd %s; rm -r %s", user_info_list->working_directory, param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+
+	if(strlen(result) == 0) {
+		sprintf(result, "250 Remove directory '%s' success!\r\n", param);
+		send_or_error(socketfd, result);
+	} else {
+		send_patched_prompt(socketfd, result, "501");
+	}
+
+	free(result);
+	free(shell_command);
 }
 
 void handle_RNFR	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify file name for rename from!\r\n");
+		return;
+	}
+
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+
+	if(param[0] != '/') {
+		strcpy(result, ptr_user_info->working_directory);
+		strcat(result, param);			
+		strcpy(param, result);
+	}
+
+	sprintf(shell_command, "[ -f %s ] && echo Found || echo \"File not found\"", param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+	printf("length = %d\n", (int)strlen(result));
+	if(strcmp(result, "Found\n") == 0) {
+		strcpy(ptr_user_info->rename_from, param);
+		sprintf(result, "350 Rename from %s success, please input RNTO 'filaname' to change the filename!\r\n", param);
+		send_or_error(socketfd, result);
+	} else {
+		send_patched_prompt(socketfd, result, "501");
+	}
+
+	free(result);
+	free(shell_command);
 }
 
 void handle_RNTO	(UserInfo* ptr_user_info, char* param, int socketfd) {
+	if(ptr_user_info->state < 2) {
+		send_or_error(ptr_user_info->socketfd, "530 Not logged in.\r\n");
+		return;
+	}
 
+	if(strlen(param) == 0) {
+		send_or_error(socketfd, "501 Please specify file name for rename to!\r\n");
+		return;
+	}
+
+	char* result = (char*)malloc(MAX_SHELL_RESPONSE_LENGTH * sizeof(char));
+	char* shell_command = (char*)malloc(MAX_BUFF_LENGTH * sizeof(char));
+
+	if(param[0] != '/') {
+		strcpy(result, ptr_user_info->working_directory);
+		strcat(result, param);			
+		strcpy(param, result);
+	}
+
+	sprintf(shell_command, "mv %s %s", ptr_user_info->rename_from ,param);
+	printf("shell_command = %s\n", shell_command);
+	
+	console(shell_command, result);
+
+	printf("result = %s", result);
+	
+	if(strlen(result) == 0) {
+		sprintf(result, "350 Rename from %s to %s success\r\n", ptr_user_info->rename_from, param);
+		send_or_error(socketfd, result);
+	} else {
+		send_patched_prompt(socketfd, result, "501");
+	}
+
+	free(result);
+	free(shell_command);
 }

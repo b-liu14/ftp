@@ -41,5 +41,7 @@
 #define MAX_SHELL_RESPONSE_LENGTH  1000
 #define MAX_SHELL_COMMAND_LENGTH 100
 
+extern void check_directory(char* directory);
+
 extern const char* ip_str;
 

@@ -26,11 +26,7 @@ int parse_argv(int argc, char** argv, int* port, char* directory) {
 			return -1;
 		}
 	}
-    int len = (int)strlen(directory);
-    if(directory[len - 1] != '/') {
-        directory[len] = '/';
-        directory[len+1] = '\0';
-    }
+    check_directory(directory);
 	return 0;
 }
 

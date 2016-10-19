@@ -21,6 +21,8 @@ typedef struct {
 	/* a string to store user's address */
 	char addr_str[MAX_ADDR_STR_LENGTH];
 	char working_directory[MAX_DIR_LENGTH];
+	/* file name to rename*/
+	char rename_from[MAX_ADDR_STR_LENGTH];
 } UserInfo;
 
 extern UserInfo user_info_list[];
