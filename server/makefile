@@ -8,4 +8,4 @@ $(objects): utility.h user.h command.h
 
 .PHONY: clean 
 clean: 
-	-rm -f server $(objects)
+	-rm -f server $(objects) log.txt

@@ -106,6 +106,8 @@ void handle_command(Command* ptr_command, int socketfd, char* message) {
         handle_STOR(socketfd, message);
     } else if(strcmp(ptr_command->cmd, "QUIT") == 0) {
         handle_QUIT(socketfd, message);
+    } else if(strcmp(ptr_command->cmd, "ABOR") == 0) {
+        handle_ABOR(socketfd, message);
     } else {
         send_or_error(socketfd, message);
         receive_or_error(socketfd, message);
@@ -466,4 +468,8 @@ void handle_QUIT(int socketfd, char* message) {
     QUITING = 1;
     send_or_error(socketfd, message);
     receive_or_error(socketfd, message);
+}
+
+void handle_ABOR(int socketfd, char* message) {
+    handle_QUIT(socketfd, message);
 }

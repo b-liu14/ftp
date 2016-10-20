@@ -31,6 +31,9 @@ int parse_argv(int argc, char** argv, int* port, char* directory) {
 }
 
 int main(int argc, char **argv) {
+
+	freopen("log.txt", "w", stdout);
+
 	int port = SERVER_PORT;
 	if(parse_argv(argc, argv, &port, directory) == -1) {
 		printf("invalid paramter\n");

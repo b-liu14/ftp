@@ -28,3 +28,4 @@ extern void handle_PASV(int socketfd, char* message);
 extern void handle_RETR(int socketfd, char* message);
 extern void handle_STOR(int socketfd, char* message);
 extern void handle_QUIT(int socketfd, char* message);
+extern void handle_ABOR(int socketfd, char* message);
