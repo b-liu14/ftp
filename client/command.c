@@ -1,5 +1,6 @@
 #include "command.h"
 #include "prompt.h"
+#include <time.h>
 
 int send_or_error(int socketfd, char* str) {
     strcat(str, "\r\n");
@@ -315,12 +316,11 @@ int _sendall(int s, char *buff, int *len, char* filename)
     while(! feof(fin)) {
 	int n = (int)fread(buff, sizeof(char), MAX_BUFF_LENGTH, fin); 
         total += n;
-	send(s, buff, n, 0);
         if(ferror(fin)) {
             fclose(fin);
             return -1;
         }
-	
+	send(s, buff, n, 0);
     }
 
     fclose(fin);
@@ -447,8 +447,9 @@ void handle_STOR(int socketfd, char* message) {
         printf("500 Please specify PORT/PASV mode before RETR/STOR\r\n");
         return;
     }
-
-    if(send_or_error(connectfd, buff) == -1) {
+    int len = -1;
+    receive_or_error(socketfd, message);
+    if(_sendall(connectfd, buff, &len, filename) == -1) {
         close(connectfd);
         printf("500 Send error in stor\r\n");
         return;

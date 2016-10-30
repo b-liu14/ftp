@@ -17,7 +17,7 @@
 #include <ctype.h>
 #include <time.h>
 
-#define MAX_BUFF_LENGTH 100000
+#define MAX_BUFF_LENGTH 10000
 #define MAX_PROMPT_MESSAGE_LENGTH 100
 #define MAX_CMD_LENGTH 4
 #define SERVER_PORT 21
