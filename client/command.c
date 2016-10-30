@@ -12,18 +12,16 @@ int send_or_error(int socketfd, char* str) {
 int receive_or_error(int socketfd, char* str) {
    
     while(1) {
-	printf("before recv message\n");
         int recv_len = (int)recv(socketfd, str, MAX_BUFF_LENGTH, 0);
         str[recv_len] = '\0';
         if (recv_len < 6) {
             return -1;
         } else {
-            printf("before printf while loop\n");
             int printf_len = 0;
             char* p = str;
             while(printf_len < recv_len) {
                 printf_len += printf("%s", p);
-                printf("before search for the last prompter\n");
+
                 // search for the last prompter
                 char* last = p;
                 for(int i = printf_len - 2; i >= 0; i --) {
@@ -32,9 +30,6 @@ int receive_or_error(int socketfd, char* str) {
                         break;
                     }
                 }
-     		printf("before last[3] == ''\n");           
-		printf("last = %s\n", last);
-		printf("strlen(last) = %d\n", strlen(last));
 		return 0;
                 if(last[3] == ' ') {
                    
@@ -43,10 +38,10 @@ int receive_or_error(int socketfd, char* str) {
                 p = str + printf_len;
 		printf("while loop end\n");
             }
-            
+
         }
     }
-    
+
     return 0;
 }
 
@@ -66,7 +61,7 @@ int string2command(char* str, Command* ptr_command) {
         len--;
         str[len] = '\0';
     }
-    
+
     for (int i = 0; i <= len && i <= MAX_CMD_LENGTH; i ++) {
         if(i == len) {
             strncpy(ptr_command->cmd, str, len+1);
@@ -79,8 +74,8 @@ int string2command(char* str, Command* ptr_command) {
             return 0;
         }
     }
-    
-    
+
+
     return -1;
 }
 
@@ -95,7 +90,7 @@ void handle_message(int socketfd, char message[]) {
         printf("%s", "500 request violated some internal parsing rule in the server\r\n");
         return;
     }
-    
+
     handle_command(&command, socketfd, message);
 }
 
@@ -134,10 +129,10 @@ void handle_PASV(int socketfd, char* message) {
         close(listen_socketfd);
         listen_socketfd = -1;
     }
-    
+
     send_or_error(socketfd, message);
     receive_or_error(socketfd, message);
-    
+
     Prompt pro;
     string2prompt(message, &pro);
     if(pro.code == 227) {
@@ -181,7 +176,7 @@ void parse_port_str(char* port_str, char* myip, int* port_number) {
                 break;
             }
             myip[i] = '.';
-            
+
         } else {
             myip[i] = port_str[i];
         }
@@ -201,31 +196,31 @@ void parse_port_str(char* port_str, char* myip, int* port_number) {
  */
 int _create_file_socket(char* port_str) {
     struct sockaddr_in addr;
-    
+
     if ((listen_socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1) {
         return -1;
     }
-    
+
     char myip[14];
     int port_number;
     parse_port_str(port_str, myip, &port_number);
-    
+
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port_number);
-    
+
     if (inet_pton(AF_INET, myip, &addr.sin_addr) <= 0) {
         return -1;
     }
-    
+
     if (bind(listen_socketfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
         return -1;
     }
-    
+
     if (listen(listen_socketfd, 1) == -1) {
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -238,7 +233,7 @@ void handle_PORT(int socketfd, char* message) {
         close(listen_socketfd);
         listen_socketfd = -1;
     }
-    
+
     char port_str[24];
     Command command;
     string2command(message, &command);
@@ -251,7 +246,7 @@ void handle_PORT(int socketfd, char* message) {
         printf("400 Error when create file socket\r\n");
         return;
     }
-    
+
     send_or_error(socketfd, message);
     receive_or_error(socketfd, message);
     Prompt pro;
@@ -269,26 +264,26 @@ int _create_connect_socket(char* addr_str) {
     sscanf(addr_str, "%d,%d,%d,%d,%d,%d", &p1, &p2, &p3, &p4, &p5, &p6);
     sprintf(ip, "%d.%d.%d.%d", p1, p2, p3, p4);
     port_number = p5 * 256 + p6;
-    
+
     struct sockaddr_in addr;
-    
+
     int connect_socketfd;
     if ((connect_socketfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1) {
         return -1;
     }
-    
+
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port_number);
-    
+
     if (inet_pton(AF_INET, ip, &addr.sin_addr) <= 0) {
         return -1;
     }
-    
+
     if (connect(connect_socketfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         return -1;
     }
-    
+
     return connect_socketfd;
 }
 
@@ -300,48 +295,53 @@ int _create_connect_socket(char* addr_str) {
  * @param buff
  */
 int _read_whole_file(char* filename, char* buff) {
-    
+
     // TODO
     // check ../
     char path[MAX_DIR_LENGTH] = "\0";
     strncpy(path, directory, MAX_DIR_LENGTH);
     strncpy(path+strlen(path), filename, MAX_DIR_LENGTH);
-    
+
     int total = 0;
-    
+
     FILE* fin;
     if((fin = fopen(filename, "rb")) == NULL) {
         return -1;
-    }
-    
-    while(! feof(fin)) {
-        total += (int)fread(buff+total, sizeof(char), MAX_BUFF_LENGTH, fin);
-        if(ferror(fin)) {
-            fclose(fin);
-            return -1;
-        }
-    }
-
-    buff[total] = '\0';
-    
-    fclose(fin);
+    } else {
+	return 0;
+	}
     return total;
 }
 
 // return -1 on failure, 0 on success
-int _sendall(int s, char *buf, int *len)
+int _sendall(int s, char *buff, int *len, char* filename)
 {
-    int total = 0; // how many bytes we've sent
-    int bytesleft = *len; // how many we have left to send
-    int n = -1;
-    while(total < *len) {
-        n = (int)send(s, buf+total, bytesleft, 0);
-        if (n == -1) { break; }
-        total += n;
-        bytesleft -= n;
+
+    char path[MAX_DIR_LENGTH] = "\0";
+    strncpy(path, directory, MAX_DIR_LENGTH);
+    strncpy(path+strlen(path), filename, MAX_DIR_LENGTH);
+
+    int total = 0;
+    FILE* fin;
+    if((fin = fopen(filename, "rb")) == NULL) {
+        return -1;
     }
+
+    while(! feof(fin)) {
+	int n = (int)fread(buff, sizeof(char), MAX_BUFF_LENGTH, fin); 
+        total += n;
+	send(s, buff, n, 0);
+        if(ferror(fin)) {
+            fclose(fin);
+            return -1;
+        }
+	
+    }
+
+    fclose(fin);
+
     *len = total; // return number actually sent here
-    return n==-1?-1:0; // return -1 on failure, 0 on success
+    return 0; // return -1 on failure, 0 on success
 }
 
 /*
@@ -359,10 +359,9 @@ int _recv_and_write_all(int socketfd, char* filename) {
     FILE *fout = fopen(filename, "wb");
     while(1) {
  	n = (int)recv(socketfd, ptr, MAX_BUFF_LENGTH, 0);
-	fwrite(ptr, sizeof(char), n, fout);	
         if(n <= 0) {break;}
         total += n;
-        ptr += n;
+	fwrite(ptr, sizeof(char), n, fout);	
     }
     fclose(fout);
     if(n == -1) {
@@ -379,34 +378,33 @@ int _recv_and_write_all(int socketfd, char* filename) {
      //       }
      //   }
         
-        return total;
+    return total;
     
 }
 
 void handle_RETR(int socketfd, char* message) {
-    
+
     char filename[100];
     Command command;
     string2command(message, &command);
     strncpy(filename, command.param, 100);
     // strncpy(filename, strchr(message, ' ') + 1, strlen(message));
     // filename[strlen(filename) - 1] = '\0';
-    printf("before connect\n"); 
+
     int connectfd = -1;
     if (mode == 1) {
- 	printf("mode = 1\r\n");       
+
         connectfd = _create_connect_socket(server_addr_str);
         if(connectfd == -1) {
             printf("400 Can not create connect socket\n");
             return;
         }
-        
+
         send_or_error(socketfd, message);
-        
+
     } else if (mode == 0) {
-	printf("mode = 0\n");
         send_or_error(socketfd, message);
-        
+
         if((connectfd = accept(listen_socketfd, NULL, NULL)) < 0) {
             printf("500 Can not accept on socket %d\n", listen_socketfd);
             return;
@@ -415,20 +413,20 @@ void handle_RETR(int socketfd, char* message) {
         printf("500 Please specify PORT/PASV mode before RETR/STOR\n");
         return;
     }
-    printf("before receive message\n");
+
     if(receive_or_error(socketfd, message) == -1) {
         close(connectfd);
         return;
     }
-    printf("before receive file");
+
     if(_recv_and_write_all(connectfd, filename) == -1) {
         printf("500 Receive or write error\r\n");
         close(connectfd);
         return;
     }
-    printf("before recv 220 command\n");
+
     receive_or_error(socketfd, message);
-    
+
     close(connectfd);
 }
 
@@ -437,25 +435,25 @@ void handle_STOR(int socketfd, char* message) {
     Command command;
     string2command(message, &command);
     strncpy(filename, command.param, 100);
-    
+
     char buff[MAX_BUFF_LENGTH];
     _read_whole_file(filename, buff);
-    
-    
+
+
     int connectfd = -1;
     if(mode == 1) {
-        
+
         connectfd = _create_connect_socket(server_addr_str);
         if(connectfd == -1) {
             printf("400 Can not create connect socket\n");
             return;
         }
-        
+
         send_or_error(socketfd, message);
-        
+
     } else if (mode == 0) {
         send_or_error(socketfd, message);
-        
+
         if((connectfd = accept(listen_socketfd, NULL, NULL)) < 0) {
             printf("400 Can not accept on socket %d\n", listen_socketfd);
             return;
@@ -464,7 +462,7 @@ void handle_STOR(int socketfd, char* message) {
         printf("500 Please specify PORT/PASV mode before RETR/STOR\r\n");
         return;
     }
-    
+
     if(send_or_error(connectfd, buff) == -1) {
         close(connectfd);
         printf("500 Send error in stor\r\n");
@@ -473,7 +471,7 @@ void handle_STOR(int socketfd, char* message) {
         close(connectfd);
         receive_or_error(socketfd, message);
     }
-    
+
 }
 
 void handle_QUIT(int socketfd, char* message) {
@@ -484,4 +482,5 @@ void handle_QUIT(int socketfd, char* message) {
 
 void handle_ABOR(int socketfd, char* message) {
     handle_QUIT(socketfd, message);
+
 }

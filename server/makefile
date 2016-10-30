@@ -1,11 +1,21 @@
 objects = server.o command.o user.o utility.o
-flag = -g -o
+flag = -g -Wall -std=c99
 
 server: $(objects)
-	cc $(flag) server -Wall $(objects)
+	cc $(flag) $(objects) -o server
 
-$(objects): utility.h user.h command.h
+server.o: utility.h user.h command.h
+	cc $(flag) -c server.c
 
-.PHONY: clean 
-clean: 
+command.o: utility.h user.h command.h
+	cc $(flag) -c command.c
+
+user.o: utility.h user.h command.h
+	cc $(flag) -c user.c
+
+utility.o: utility.h user.h command.h
+	cc $(flag) -c utility.c
+
+.PHONY: clean
+clean:
 	-rm -f server $(objects) log.txt
