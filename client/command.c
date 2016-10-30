@@ -295,22 +295,7 @@ int _create_connect_socket(char* addr_str) {
  * @param buff
  */
 int _read_whole_file(char* filename, char* buff) {
-
-    // TODO
-    // check ../
-    char path[MAX_DIR_LENGTH] = "\0";
-    strncpy(path, directory, MAX_DIR_LENGTH);
-    strncpy(path+strlen(path), filename, MAX_DIR_LENGTH);
-
-    int total = 0;
-
-    FILE* fin;
-    if((fin = fopen(filename, "rb")) == NULL) {
-        return -1;
-    } else {
-	return 0;
-	}
-    return total;
+    return 1;
 }
 
 // return -1 on failure, 0 on success
@@ -323,7 +308,7 @@ int _sendall(int s, char *buff, int *len, char* filename)
 
     int total = 0;
     FILE* fin;
-    if((fin = fopen(filename, "rb")) == NULL) {
+    if((fin = fopen(path, "rb")) == NULL) {
         return -1;
     }
 
