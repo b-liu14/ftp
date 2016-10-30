@@ -2,6 +2,7 @@
 #include "prompt.h"
 
 int send_or_error(int socketfd, char* str) {
+    strcat(str, "\r\n");
     if(send(socketfd, str, strlen(str), 0) < 0) {
         return -1;
     }
@@ -9,17 +10,20 @@ int send_or_error(int socketfd, char* str) {
 }
 
 int receive_or_error(int socketfd, char* str) {
+   
     while(1) {
+	printf("before recv message\n");
         int recv_len = (int)recv(socketfd, str, MAX_BUFF_LENGTH, 0);
         str[recv_len] = '\0';
         if (recv_len < 6) {
             return -1;
         } else {
+            printf("before printf while loop\n");
             int printf_len = 0;
             char* p = str;
             while(printf_len < recv_len) {
                 printf_len += printf("%s", p);
-                
+                printf("before search for the last prompter\n");
                 // search for the last prompter
                 char* last = p;
                 for(int i = printf_len - 2; i >= 0; i --) {
@@ -28,11 +32,16 @@ int receive_or_error(int socketfd, char* str) {
                         break;
                     }
                 }
-                
+     		printf("before last[3] == ''\n");           
+		printf("last = %s\n", last);
+		printf("strlen(last) = %d\n", strlen(last));
+		return 0;
                 if(last[3] == ' ') {
+                   
                     return 0;
                 }
                 p = str + printf_len;
+		printf("while loop end\n");
             }
             
         }
@@ -347,29 +356,31 @@ int _recv_and_write_all(int socketfd, char* filename) {
     int n;
     char buff[MAX_BUFF_LENGTH];
     char* ptr = buff;
+    FILE *fout = fopen(filename, "wb");
     while(1) {
-        n = (int)recv(socketfd, ptr, MAX_BUFF_LENGTH, 0);
+ 	n = (int)recv(socketfd, ptr, MAX_BUFF_LENGTH, 0);
+	fwrite(ptr, sizeof(char), n, fout);	
         if(n <= 0) {break;}
         total += n;
         ptr += n;
     }
+    fclose(fout);
     if(n == -1) {
         return -1;
-    } else {
-        FILE* fout = fopen(filename, "wb");
-        int left = total;
-        int n = -1;
-        while(left > 0) {
-            left -= (int)fwrite(buff, sizeof(char), MAX_BUFF_LENGTH, fout);
-            if(ferror(fout)) {
-                fclose(fout);
-                return -1;
-            }
-        }
+    } 
+     //   FILE* fout = fopen(filename, "wb");
+     //   int left = total;
+     //   int n = -1;
+     //   while(left > 0) {
+     //       left -= (int)fwrite(buff, sizeof(char), MAX_BUFF_LENGTH, fout);
+     //       if(ferror(fout)) {
+     //           fclose(fout);
+     //           return -1;
+     //       }
+     //   }
         
-        fclose(fout);
         return total;
-    }
+    
 }
 
 void handle_RETR(int socketfd, char* message) {
@@ -380,10 +391,10 @@ void handle_RETR(int socketfd, char* message) {
     strncpy(filename, command.param, 100);
     // strncpy(filename, strchr(message, ' ') + 1, strlen(message));
     // filename[strlen(filename) - 1] = '\0';
-    
+    printf("before connect\n"); 
     int connectfd = -1;
     if (mode == 1) {
-        
+ 	printf("mode = 1\r\n");       
         connectfd = _create_connect_socket(server_addr_str);
         if(connectfd == -1) {
             printf("400 Can not create connect socket\n");
@@ -393,6 +404,7 @@ void handle_RETR(int socketfd, char* message) {
         send_or_error(socketfd, message);
         
     } else if (mode == 0) {
+	printf("mode = 0\n");
         send_or_error(socketfd, message);
         
         if((connectfd = accept(listen_socketfd, NULL, NULL)) < 0) {
@@ -403,18 +415,18 @@ void handle_RETR(int socketfd, char* message) {
         printf("500 Please specify PORT/PASV mode before RETR/STOR\n");
         return;
     }
-    
+    printf("before receive message\n");
     if(receive_or_error(socketfd, message) == -1) {
         close(connectfd);
         return;
     }
-    
+    printf("before receive file");
     if(_recv_and_write_all(connectfd, filename) == -1) {
         printf("500 Receive or write error\r\n");
         close(connectfd);
         return;
     }
-    
+    printf("before recv 220 command\n");
     receive_or_error(socketfd, message);
     
     close(connectfd);

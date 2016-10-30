@@ -5,7 +5,7 @@ client: $(objects)
 	cc $(flag) client $(objects)
 
 $(objects): command.h utility.h prompt.h
-
+	
 .PHONY: clean 
 clean: 
 	-rm -f client $(objects)

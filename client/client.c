@@ -9,8 +9,16 @@ char server_addr_str[24];
 
 int QUITING = 0;
 char directory[MAX_DIR_LENGTH] = "";
+char ip[MAX_DIR_LENGTH] = "127.0.0.1";
 
 int main(int argc, char **argv) {
+
+	for (int i = 0; i < argc; i ++) {
+		if (strcmp(argv[i], "--ip") == 0) {
+			strcpy(ip, argv[++i]);
+		}
+	}
+
 	int socketfd = -1;
 	struct sockaddr_in addr;
 	char sentence[MAX_BUFF_LENGTH];
@@ -23,7 +31,7 @@ int main(int argc, char **argv) {
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(SERVER_PORT);
-	if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) <= 0) {
+	if (inet_pton(AF_INET, ip, &addr.sin_addr) <= 0) {
 		perror("inet_pton()");
 		return 1;
 	}
